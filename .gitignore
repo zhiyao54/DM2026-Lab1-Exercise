@@ -39,9 +39,6 @@ config/.env
 agent_pipeline/keys/*
 !agent_pipeline/keys/grading_public_key.pem
 
-# Agent-dev track: each student's in-progress workspace is generated
-# content, not course source.
-agent_dev_workspace/
 
 
 # Local Anaconda Navigator tooling state, not course content -- created
