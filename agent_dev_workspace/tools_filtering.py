@@ -1,6 +1,6 @@
 import numpy as np
 import pandas as pd
-from scipy.stats import pearsonr
+from scipy.stats import pearsonr, spearmanr
 from langchain_core.tools import tool
 
 def make_tools(session):
@@ -143,4 +143,81 @@ def make_tools(session):
 
         return summary
 
-    return [variance_filter_tool, pearson_filter_tool]
+    @tool
+    def spearman_filter_tool(category: str) -> dict:
+        """Computes Spearman rank correlation between each term's frequency and a binary target category indicator.
+
+        Args:
+            category: Target category label to correlate terms against (one-vs-rest).
+
+        Returns:
+            Dictionary containing result_id, n_terms, category, and top 20 kept_terms.
+        """
+        if session.feature_matrix is None or session.feature_names is None:
+            return {"error": "No feature matrix or feature names found in session. Run build_dtm_tool first."}
+
+        # Resolve labels from session
+        labels = session.labels
+        if labels is None and session.dataframe is not None:
+            if "category_name" in session.dataframe.columns:
+                labels = session.dataframe["category_name"].values
+            elif "label" in session.dataframe.columns:
+                labels = session.dataframe["label"].values
+
+        if labels is None:
+            return {"error": "No labels found in session to compute category correlation."}
+
+        # Create binary target vector (1 for matching category, 0 otherwise)
+        target = (np.array(labels) == category).astype(float)
+
+        X = session.feature_matrix
+        if hasattr(X, "toarray"):
+            X_dense = X.toarray()
+        else:
+            X_dense = np.array(X)
+
+        feature_names = list(session.feature_names)
+        spearman_rs = []
+
+        for col in range(X_dense.shape[1]):
+            col_vals = X_dense[:, col]
+            # Handle zero variance edge case to avoid NaN
+            if np.std(col_vals) == 0 or np.std(target) == 0:
+                r_val = 0.0
+            else:
+                r_val, _ = spearmanr(col_vals, target)
+                if np.isnan(r_val):
+                    r_val = 0.0
+            spearman_rs.append(r_val)
+
+        report_df = pd.DataFrame({
+            "term": feature_names,
+            "spearman_r": spearman_rs
+        })
+
+        # Sort by absolute correlation value descending, highest absolute correlation first
+        report_df["abs_r"] = report_df["spearman_r"].abs()
+        report_df = report_df.sort_values(by="abs_r", ascending=False).drop(columns=["abs_r"]).reset_index(drop=True)
+
+        all_terms = report_df["term"].tolist()
+        kept_terms_summary = all_terms[:20]
+
+        res_id = session.next_result_id("spearman_filter")
+
+        summary = {
+            "result_id": res_id,
+            "category": category,
+            "n_terms": len(feature_names),
+            "kept_terms": kept_terms_summary
+        }
+
+        session.store_result(
+            tool_name="spearman_filter_tool",
+            args={"category": category},
+            summary=summary,
+            full_report=report_df
+        )
+
+        return summary
+
+    return [variance_filter_tool, pearson_filter_tool, spearman_filter_tool]
