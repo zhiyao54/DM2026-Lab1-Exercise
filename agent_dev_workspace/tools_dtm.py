@@ -1,4 +1,5 @@
 from typing import Any, Dict
+import pandas as pd
 from sklearn.feature_extraction.text import CountVectorizer
 from langchain_core.tools import tool
 
@@ -53,4 +54,41 @@ def make_tools(session: Any) -> list:
         session.store_result("build_dtm_tool", {}, summary)
         return summary
 
-    return [build_dtm_tool]
+    @tool
+    def term_frequency_tool() -> Dict[str, Any]:
+        """Aggregates term frequencies across all documents from the document-term matrix.
+
+        Sums counts for each term across all documents using session.feature_matrix and
+        session.feature_names. Stores a full_report DataFrame containing term and frequency,
+        sorted in descending order by frequency.
+
+        Returns:
+            Dict containing status, result_id, n_terms, and top_20 list of term frequencies.
+        """
+        if session.feature_matrix is None or session.feature_names is None:
+            return {
+                "status": "error",
+                "message": "Document-term matrix not found in session. Please run build_dtm_tool first."
+            }
+
+        counts = session.feature_matrix.sum(axis=0).A1.tolist()
+        df = pd.DataFrame({
+            "term": session.feature_names,
+            "frequency": [int(c) for c in counts]
+        }).sort_values(by="frequency", ascending=False).reset_index(drop=True)
+
+        n_terms = len(df)
+        top_20 = df.head(20).to_dict(orient="records")
+
+        result_id = session.next_result_id("term_frequency")
+        summary = {
+            "status": "success",
+            "result_id": result_id,
+            "n_terms": n_terms,
+            "top_20": top_20
+        }
+
+        session.store_result("term_frequency_tool", {}, summary, full_report=df)
+        return summary
+
+    return [build_dtm_tool, term_frequency_tool]

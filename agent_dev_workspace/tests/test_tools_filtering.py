@@ -89,3 +89,48 @@ def test_pearson_filter_tool():
     for term, exp_r in expected_pearson.items():
         val = full_report.loc[full_report["term"] == term, "pearson_r"].iloc[0]
         assert pytest.approx(val, abs=1e-3) == exp_r
+
+
+def test_spearman_filter_tool():
+    # 1. Fresh session per test function to prevent state pollution
+    session = SessionState()
+    premade_tools, _ = load_workspace_tools("premade_tools", session)
+    load_dataset_tool = next(t for t in premade_tools if t.name == "load_dataset_tool")
+
+    load_dataset_tool.invoke(
+        {
+            "file_path": "agent_dev/sample_fixture.csv",
+            "text_column": "text",
+            "label_column": "label",
+        }
+    )
+
+    # 2. Build DTM
+    dtm_tools = make_dtm_tools(session)
+    build_dtm_tool = next(t for t in dtm_tools if t.name == "build_dtm_tool")
+    build_dtm_tool.invoke({})
+
+    # 3. Test spearman_filter_tool against category "catB"
+    filtering_tools = make_filtering_tools(session)
+    spearman_filter_tool = next(
+        t for t in filtering_tools if t.name == "spearman_filter_tool"
+    )
+
+    result = spearman_filter_tool.invoke({"category": "catB"})
+
+    res_id = result["result_id"]
+    full_report = session.results_store[res_id]["full_report"]
+
+    # Known answer #6 Spearman r values for target "catB":
+    # alpha: -0.7500, always: 0.3780, beta: -0.7746, delta: 1.0000, gamma: 0.9363
+    expected_spearman = {
+        "alpha": -0.7500,
+        "always": 0.3780,
+        "beta": -0.7746,
+        "delta": 1.0000,
+        "gamma": 0.9363,
+    }
+
+    for term, exp_r in expected_spearman.items():
+        val = full_report.loc[full_report["term"] == term, "spearman_r"].iloc[0]
+        assert pytest.approx(val, abs=1e-3) == exp_r

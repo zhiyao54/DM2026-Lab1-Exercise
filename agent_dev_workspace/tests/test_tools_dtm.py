@@ -38,3 +38,39 @@ def test_build_dtm_tool_known_answer_4():
     assert session.feature_matrix.shape == (8, 5)
     assert session.feature_names == ["alpha", "always", "beta", "delta", "gamma"]
     assert "count_vectorizer" in session.artifacts
+
+
+def test_term_frequency_tool():
+    session = SessionState()
+    premade_tools, _ = load_workspace_tools("premade_tools", session)
+    load_dataset_tool = next(t for t in premade_tools if t.name == "load_dataset_tool")
+
+    load_dataset_tool.invoke({
+        "file_path": "agent_dev/sample_fixture.csv",
+        "text_column": "text",
+        "label_column": "label"
+    })
+
+    dtm_tools = make_tools(session)
+    build_dtm_tool = next(t for t in dtm_tools if t.name == "build_dtm_tool")
+    term_frequency_tool = next(t for t in dtm_tools if t.name == "term_frequency_tool")
+
+    dtm_res = build_dtm_tool.invoke({})
+    assert dtm_res["status"] == "success"
+
+    tf_res = term_frequency_tool.invoke({})
+    assert tf_res["status"] == "success"
+    assert tf_res["n_terms"] == 5
+
+    # Known answer #14 expected term frequencies
+    expected_freqs = {
+        "alpha": 6,
+        "always": 7,
+        "beta": 3,
+        "delta": 4,
+        "gamma": 7
+    }
+
+    top_20 = tf_res["top_20"]
+    actual_freqs = {item["term"]: item["frequency"] for item in top_20}
+    assert actual_freqs == expected_freqs
