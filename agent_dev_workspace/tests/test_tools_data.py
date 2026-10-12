@@ -197,3 +197,54 @@ def test_tokenize_tool_known_answer_10():
     unigrams = session.dataframe["unigrams"].tolist()
     assert len(unigrams) == 8
     assert unigrams[7] == []
+
+
+def test_describe_data_tool_known_answer_18():
+    session = SessionState()
+
+    premade_tools, _ = load_workspace_tools("premade_tools", session)
+    load_dataset_tool = next(t for t in premade_tools if t.name == "load_dataset_tool")
+    load_dataset_tool.invoke({
+        "file_path": "agent_dev/sample_fixture.csv",
+        "text_column": "text",
+        "label_column": "label"
+    })
+
+    tools = make_tools(session)
+    describe_data_tool = next(t for t in tools if t.name == "describe_data_tool")
+
+    res = describe_data_tool.invoke({})
+
+    assert res["status"] == "success"
+
+    overall = res["overall"]
+    assert overall["count"] == pytest.approx(8)
+    assert overall["mean"] == pytest.approx(19.875, abs=1e-3)
+    assert overall["std"] == pytest.approx(9.4330, abs=1e-3)
+    assert overall["min"] == pytest.approx(0)
+    assert overall["25%"] == pytest.approx(17.75, abs=1e-3)
+    assert overall["50%"] == pytest.approx(20.5, abs=1e-3)
+    assert overall["75%"] == pytest.approx(25.25, abs=1e-3)
+    assert overall["max"] == pytest.approx(30)
+
+    catA = res["per_category"]["catA"]
+    assert catA["count"] == pytest.approx(4)
+    assert catA["mean"] == pytest.approx(17.25, abs=1e-3)
+    assert catA["std"] == pytest.approx(12.5, abs=1e-3)
+    assert catA["min"] == pytest.approx(0)
+    assert catA["25%"] == pytest.approx(12.75, abs=1e-3)
+    assert catA["50%"] == pytest.approx(20.0, abs=1e-3)
+    assert catA["75%"] == pytest.approx(24.5, abs=1e-3)
+    assert catA["max"] == pytest.approx(29)
+
+    catB = res["per_category"]["catB"]
+    assert catB["count"] == pytest.approx(4)
+    assert catB["mean"] == pytest.approx(22.5, abs=1e-3)
+    assert catB["std"] == pytest.approx(5.7446, abs=1e-3)
+    assert catB["min"] == pytest.approx(18)
+    assert catB["25%"] == pytest.approx(18.0, abs=1e-3)
+    assert catB["50%"] == pytest.approx(21.0, abs=1e-3)
+    assert catB["75%"] == pytest.approx(25.5, abs=1e-3)
+    assert catB["max"] == pytest.approx(30)
+
+    assert session.pending_figure is not None
