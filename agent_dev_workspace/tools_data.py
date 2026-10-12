@@ -1,9 +1,48 @@
+import os
 import pandas as pd
 from typing import Dict, Any, List
 from langchain_core.tools import tool
 
 
 def make_tools(session):
+    @tool
+    def list_files_tool(subdirectory: str = ".") -> Dict[str, Any]:
+        """Lists directory folders and files in a specified subdirectory.
+
+        Args:
+            subdirectory: The relative path of the directory to list. Defaults to '.'.
+
+        Returns:
+            A dictionary summary containing result_id, subdirectory, and lists of directories and files.
+        """
+        if not os.path.exists(subdirectory):
+            return {
+                "status": "error",
+                "message": f"Path '{subdirectory}' does not exist."
+            }
+
+        if not os.path.isdir(subdirectory):
+            return {
+                "status": "error",
+                "message": f"Path '{subdirectory}' is not a directory."
+            }
+
+        entries = os.listdir(subdirectory)
+        directories = sorted([e for e in entries if os.path.isdir(os.path.join(subdirectory, e))])
+        files = sorted([e for e in entries if os.path.isfile(os.path.join(subdirectory, e))])
+
+        result_id = session.next_result_id("list_files")
+        summary = {
+            "status": "success",
+            "result_id": result_id,
+            "subdirectory": subdirectory,
+            "directories": directories,
+            "files": files,
+        }
+
+        session.store_result("list_files_tool", {"subdirectory": subdirectory}, summary)
+        return summary
+
     @tool
     def inspect_data_tool(offset: int = 0, n_rows: int = 5, max_text_len: int = 100) -> Dict[str, Any]:
         """Peeks at a slice of the working DataFrame (session.dataframe) after loading.
@@ -225,4 +264,10 @@ def make_tools(session):
         session.store_result("sample_data_tool", {"n": n, "random_state": random_state}, summary)
         return summary
 
-    return [inspect_data_tool, check_missing_tool, check_duplicates_tool, sample_data_tool]
+    return [
+        list_files_tool,
+        inspect_data_tool,
+        check_missing_tool,
+        check_duplicates_tool,
+        sample_data_tool,
+    ]

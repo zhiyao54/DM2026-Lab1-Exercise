@@ -151,3 +151,20 @@ def test_sample_data_tool_known_answer_13():
     assert isinstance(res["counts_per_category"], dict)
     # Ensure original session.dataframe remains intact (8 rows)
     assert len(session.dataframe) == 8
+
+
+def test_list_files_tool_known_answer_11():
+    """Tests list_files_tool against TEST_FIXTURE.md known answer #11.
+
+    Lists directory contents in 'newdataset' and checks expected folders and files.
+    """
+    session = SessionState()
+    tools = make_tools(session)
+    list_files_tool = next(t for t in tools if t.name == "list_files_tool")
+
+    res = list_files_tool.invoke({"subdirectory": "newdataset"})
+
+    assert res["status"] == "success"
+    assert res["subdirectory"] == "newdataset"
+    assert res["directories"] == []
+    assert res["files"] == ["Reddit-stock-sentiment.csv"]
