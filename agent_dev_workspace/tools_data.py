@@ -1,5 +1,6 @@
 import os
 import pandas as pd
+import nltk
 from typing import Dict, Any, List
 from langchain_core.tools import tool
 
@@ -264,10 +265,50 @@ def make_tools(session):
         session.store_result("sample_data_tool", {"n": n, "random_state": random_state}, summary)
         return summary
 
+    @tool
+    def tokenize_tool() -> Dict[str, Any]:
+        """Tokenizes text for each document in session.dataframe using nltk.word_tokenize on lowercased text.
+
+        Saves tokenized unigrams into session.dataframe['unigrams']. Handles empty or missing text as [].
+
+        Returns:
+            A summary dictionary containing result_id, n_documents, and first_3_documents.
+        """
+        if session.dataframe is None:
+            return {
+                "status": "error",
+                "message": "No dataset loaded in session.dataframe. Call load_dataset_tool first."
+            }
+
+        df = session.dataframe
+
+        def _tokenize_val(val):
+            if pd.isna(val) or not str(val).strip():
+                return []
+            return nltk.word_tokenize(str(val).lower())
+
+        df["unigrams"] = df["text"].apply(_tokenize_val)
+
+        unigrams_list = df["unigrams"].tolist()
+        first_3_documents = unigrams_list[:3]
+        n_documents = len(df)
+
+        result_id = session.next_result_id("tokenize")
+        summary = {
+            "status": "success",
+            "result_id": result_id,
+            "n_documents": n_documents,
+            "first_3_documents": first_3_documents,
+        }
+
+        session.store_result("tokenize_tool", {}, summary)
+        return summary
+
     return [
         list_files_tool,
         inspect_data_tool,
         check_missing_tool,
         check_duplicates_tool,
         sample_data_tool,
+        tokenize_tool,
     ]

@@ -168,3 +168,32 @@ def test_list_files_tool_known_answer_11():
     assert res["subdirectory"] == "newdataset"
     assert res["directories"] == []
     assert res["files"] == ["Reddit-stock-sentiment.csv"]
+
+
+def test_tokenize_tool_known_answer_10():
+    session = SessionState()
+
+    premade_tools, _ = load_workspace_tools("premade_tools", session)
+    load_dataset_tool = next(t for t in premade_tools if t.name == "load_dataset_tool")
+    load_dataset_tool.invoke({
+        "file_path": "agent_dev/sample_fixture.csv",
+        "text_column": "text",
+        "label_column": "label"
+    })
+
+    tools = make_tools(session)
+    tokenize_tool = next(t for t in tools if t.name == "tokenize_tool")
+
+    res = tokenize_tool.invoke({})
+
+    assert res["status"] == "success"
+    assert res["n_documents"] == 8
+    assert len(res["first_3_documents"]) == 3
+    assert res["first_3_documents"][0] == ["always", "alpha", "alpha", "alpha", "beta"]
+    assert res["first_3_documents"][1] == ["always", "alpha", "alpha", "beta"]
+    assert res["first_3_documents"][2] == ["always", "alpha", "beta"]
+
+    assert "unigrams" in session.dataframe.columns
+    unigrams = session.dataframe["unigrams"].tolist()
+    assert len(unigrams) == 8
+    assert unigrams[7] == []
