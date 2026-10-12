@@ -74,3 +74,47 @@ def test_term_frequency_tool():
     top_20 = tf_res["top_20"]
     actual_freqs = {item["term"]: item["frequency"] for item in top_20}
     assert actual_freqs == expected_freqs
+
+
+def test_dtm_heatmap_tool_known_answer_21():
+    session = SessionState()
+    premade_tools, _ = load_workspace_tools("premade_tools", session)
+    load_dataset_tool = next(t for t in premade_tools if t.name == "load_dataset_tool")
+
+    load_dataset_tool.invoke({
+        "file_path": "agent_dev/sample_fixture.csv",
+        "text_column": "text",
+        "label_column": "label"
+    })
+
+    dtm_tools = make_tools(session)
+    build_dtm_tool = next(t for t in dtm_tools if t.name == "build_dtm_tool")
+    dtm_heatmap_tool = next(t for t in dtm_tools if t.name == "dtm_heatmap_tool")
+
+    build_dtm_tool.invoke({})
+
+    # Test full matrix slice default (20x20 on 8x5 matrix)
+    res_default = dtm_heatmap_tool.invoke({})
+    assert res_default["status"] == "success"
+    assert res_default["document_indices"] == list(range(8))
+    assert res_default["term_names"] == ["alpha", "always", "beta", "delta", "gamma"]
+
+    expected_full_matrix = [
+        [3, 1, 1, 0, 0],
+        [2, 1, 1, 0, 0],
+        [1, 1, 1, 0, 0],
+        [0, 1, 0, 1, 3],
+        [0, 1, 0, 1, 2],
+        [0, 1, 0, 1, 1],
+        [0, 1, 0, 1, 1],
+        [0, 0, 0, 0, 0]
+    ]
+    assert res_default["matrix"] == expected_full_matrix
+    assert session.pending_figure is not None
+
+    # Test custom slice (n_terms=2, n_documents=3)
+    res_sliced = dtm_heatmap_tool.invoke({"n_terms": 2, "n_documents": 3})
+    assert res_sliced["status"] == "success"
+    assert res_sliced["document_indices"] == [0, 1, 2]
+    assert res_sliced["term_names"] == ["alpha", "always"]
+    assert res_sliced["matrix"] == [[3, 1], [2, 1], [1, 1]]

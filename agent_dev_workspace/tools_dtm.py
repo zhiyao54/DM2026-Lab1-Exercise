@@ -1,5 +1,7 @@
 from typing import Any, Dict
 import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
 from sklearn.feature_extraction.text import CountVectorizer
 from langchain_core.tools import tool
 
@@ -91,4 +93,61 @@ def make_tools(session: Any) -> list:
         session.store_result("term_frequency_tool", {}, summary, full_report=df)
         return summary
 
-    return [build_dtm_tool, term_frequency_tool]
+    @tool
+    def dtm_heatmap_tool(n_terms: int = 20, n_documents: int = 20) -> Dict[str, Any]:
+        """Generates a heatmap of a slice of the document-term matrix.
+
+        Slices session.feature_matrix[0:n_documents, 0:n_terms] in their existing order,
+        renders a Seaborn heatmap annotated with raw counts, and sets session.pending_figure.
+
+        Args:
+            n_terms: Number of terms (columns) from the start of the vocabulary to include (default 20).
+            n_documents: Number of documents (rows) from the start of the DataFrame to include (default 20).
+
+        Returns:
+            Dict containing status, result_id, document_indices, term_names, and matrix slice values.
+        """
+        if session.feature_matrix is None or session.feature_names is None:
+            return {
+                "status": "error",
+                "message": "Document-term matrix not found in session. Please run build_dtm_tool first."
+            }
+
+        total_docs, total_terms = session.feature_matrix.shape
+        actual_docs = min(n_documents, total_docs)
+        actual_terms = min(n_terms, total_terms)
+
+        matrix_slice = session.feature_matrix[:actual_docs, :actual_terms].toarray()
+        terms_slice = session.feature_names[:actual_terms]
+        doc_indices = list(range(actual_docs))
+
+        fig, ax = plt.subplots(figsize=(max(6, actual_terms * 0.8), max(4, actual_docs * 0.4)))
+        sns.heatmap(
+            matrix_slice,
+            annot=True,
+            fmt="d",
+            cmap="YlGnBu",
+            xticklabels=terms_slice,
+            yticklabels=doc_indices,
+            ax=ax
+        )
+        ax.set_title("Document-Term Matrix Heatmap")
+        ax.set_xlabel("Term")
+        ax.set_ylabel("Document Index")
+        plt.tight_layout()
+
+        session.pending_figure = fig
+
+        result_id = session.next_result_id("dtm_heatmap")
+        summary = {
+            "status": "success",
+            "result_id": result_id,
+            "document_indices": doc_indices,
+            "term_names": terms_slice,
+            "matrix": [row.tolist() for row in matrix_slice]
+        }
+
+        session.store_result("dtm_heatmap_tool", {"n_terms": n_terms, "n_documents": n_documents}, summary)
+        return summary
+
+    return [build_dtm_tool, term_frequency_tool, dtm_heatmap_tool]
